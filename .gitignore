@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Sanal ortam
+venv/
+env/
+ENV/
+.env
+.venv
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+
+# Geçici dosyalar
+temp/
+tmp/
+*.tmp
+*.bak
+*.log
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.mov
+
+# FFmpeg
+ffmpeg/
+ffmpeg-master-*/
+*.7z
+
+# Proje özel
+dubbed_video.mp4
+extracted_audio.wav
+temp-audio.m4a
+
+# Sistem dosyaları
+.DS_Store
+Thumbs.db
+desktop.ini 
