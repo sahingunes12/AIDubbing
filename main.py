@@ -7,6 +7,7 @@ from utils.video_processing import VideoProcessor
 import tempfile
 import hydralit_components as hc
 from streamlit_option_menu import option_menu
+from utils.youtube_downloader import YouTubeDownloader
 
 # Sayfa yapılandırması
 st.set_page_config(
@@ -194,6 +195,23 @@ uploaded_file = st.file_uploader(
     type=["mp4", "mov", "avi"],
     help="Dublaj yapılacak videoyu seçin"
 )
+
+# YouTube video indirme kısmı
+st.header("YouTube Video İndirme")
+youtube_url = st.text_input("YouTube Video Linki Girin:")
+
+if st.button("Videoyu İndir"):
+    if youtube_url:
+        downloader = YouTubeDownloader()
+        try:
+            video_path = downloader.download_video(youtube_url)
+            st.success(f"Video başarıyla indirildi: {video_path}")
+            # İndirilen videoyu önizleme
+            st.video(video_path)
+        except Exception as e:
+            st.error(f"İndirme hatası: {str(e)}")
+    else:
+        st.warning("Lütfen geçerli bir YouTube linki girin.")
 
 if uploaded_file:
     try:

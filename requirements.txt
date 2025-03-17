@@ -1,3 +1,4 @@
+
 # Web Arayüzü
 streamlit==1.32.0
 streamlit-option-menu==0.3.12
@@ -6,10 +7,13 @@ hydralit_components==1.0.10
 # Video İşleme
 moviepy==1.0.3
 ffmpeg-python==0.2.0
+pydub==0.25.1  # Ses dönüştürme için ekledik
+
+# Youtube video indirme
+yt-dlp==2024.03.09
 
 # Ses Tanıma ve İşleme
-openai-whisper
-whisper
+openai-whisper==20231114
 soundfile==0.12.1
 librosa==0.10.1
 
@@ -28,7 +32,6 @@ face-alignment==1.4.1
 python-dotenv==1.0.0
 numpy==1.24.3
 
-# Torch (Whisper için gerekli)
---find-links https://download.pytorch.org/whl/torch_stable.html
-torch==2.2.0+cu118
-torchaudio==2.2.0+cu118 
+# Torch (CPU Sürümü)
+torch==2.2.0+cpu
+torchaudio==2.2.0+cpu

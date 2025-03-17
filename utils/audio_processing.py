@@ -7,6 +7,9 @@ import librosa
 import soundfile as sf
 import tempfile
 import subprocess
+import speech_recognition as sr
+from pydub import AudioSegment
+from pytube import YouTube
 
 class AudioProcessor:
     def __init__(self):
@@ -44,115 +47,82 @@ class AudioProcessor:
             output_audio_path = os.path.join(self.temp_dir, "extracted_audio.wav")
         
         try:
-            # FFmpeg kontrolü
-            if not self._check_ffmpeg():
-                raise Exception("FFmpeg yüklü değil veya bulunamıyor")
-
             # Çıktı dizininin varlığını kontrol et
             os.makedirs(os.path.dirname(output_audio_path), exist_ok=True)
             
-            try:
-                # FFmpeg ile ses çıkarma
-                cmd = [
-                    self.ffmpeg_path,
-                    '-y',  # Varolan dosyanın üzerine yaz
-                    '-i', video_path,  # Girdi dosyası
-                    '-vn',  # Video akışını devre dışı bırak
-                    '-acodec', 'pcm_s16le',  # Ses codec'i
-                    '-ar', '16000',  # Örnekleme hızı
-                    '-ac', '1',  # Tek kanal (mono)
-                    output_audio_path  # Çıktı dosyası
-                ]
-                subprocess.run(cmd, check=True, capture_output=True)
-                
-                # Dosyanın oluşturulduğunu ve boyutunun > 0 olduğunu kontrol et
-                if not os.path.exists(output_audio_path) or os.path.getsize(output_audio_path) == 0:
-                    raise Exception("Ses dosyası oluşturulamadı veya boş")
-                
-            except (subprocess.SubprocessError, Exception) as e:
-                print(f"FFmpeg ses çıkarma hatası: {str(e)}")
-                # FFmpeg başarısız olursa MoviePy ile dene
-                video = VideoFileClip(video_path)
-                if video.audio is None:
-                    raise Exception("Video dosyasında ses bulunamadı")
-                try:
-                    video.audio.write_audiofile(
-                        output_audio_path,
-                        codec='pcm_s16le',
-                        fps=16000,
-                        verbose=False,
-                        logger=None
-                    )
-                finally:
-                    video.close()
+            # FFmpeg ile ses çıkarma
+            command = [
+                self.ffmpeg_path,
+                "-i", video_path,  # Girdi olarak video dosyasını al
+                "-vn",  # Görüntüyü kaldır
+                "-acodec", "pcm_s16le",  # WAV formatına çevir
+                "-ar", "16000",  # 16 kHz örnekleme hızı
+                "-ac", "1",  # Mono kanal
+                "-y",  # Varolan dosyanın üzerine yaz
+                output_audio_path
+            ]
             
-            # Son kontrol
+            # FFmpeg komutunu çalıştır
+            result = subprocess.run(command, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                raise Exception(f"FFmpeg hatası: {result.stderr}")
+            
+            # Çıktı dosyasını kontrol et
             if not os.path.exists(output_audio_path) or os.path.getsize(output_audio_path) == 0:
                 raise Exception("Ses dosyası oluşturulamadı veya boş")
             
             return output_audio_path
             
-        except Exception as e:
-            # Hata durumunda temizlik yap
-            if 'video' in locals():
+        except subprocess.SubprocessError as e:
+            # FFmpeg başarısız olursa MoviePy ile dene
+            try:
+                video = VideoFileClip(video_path)
+                if video.audio is None:
+                    raise Exception("Video dosyasında ses bulunamadı")
+                
+                video.audio.write_audiofile(
+                    output_audio_path,
+                    codec='pcm_s16le',
+                    fps=16000,
+                    verbose=False,
+                    logger=None
+                )
+                video.close()
+                return output_audio_path
+                
+            except Exception as e:
+                # Son çare olarak pydub ile dene
                 try:
-                    video.close()
-                except:
-                    pass
-            raise Exception(f"Ses çıkarma işlemi başarısız: {str(e)}")
+                    audio_segment = AudioSegment.from_file(video_path)
+                    audio_segment.export(output_audio_path, format="wav")
+                    return output_audio_path
+                except Exception as e:
+                    raise Exception(f"Ses çıkarma işlemi başarısız: {str(e)}")
 
-    def speech_to_text(self, audio_path: str, language: str = None) -> dict:
+    def speech_to_text(self, audio_path: str, language: str = "en-US") -> dict:
         """Sesi metne çevir"""
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"Ses dosyası bulunamadı: {audio_path}")
-            
+        
         if os.path.getsize(audio_path) == 0:
             raise Exception("Ses dosyası boş")
-            
+        
         try:
-            # Whisper modelini yükle
-            if self.whisper_model is None:
-                print("Whisper modeli yükleniyor...")
-                self.whisper_model = whisper.load_model("base")
-                print("Whisper modeli yüklendi")
-            
-            # Ses dosyasını kontrol et
-            try:
-                y, sr = librosa.load(audio_path, sr=None)
-                if len(y) == 0:
-                    raise Exception("Ses verisi boş")
-            except Exception as e:
-                print(f"Ses dosyası kontrolü başarısız: {str(e)}")
-                # Alternatif yöntem: FFmpeg ile ses dosyasını yeniden kodla
-                temp_audio = os.path.join(self.temp_dir, "temp_audio.wav")
-                cmd = [
-                    self.ffmpeg_path,
-                    '-y',
-                    '-i', audio_path,
-                    '-acodec', 'pcm_s16le',
-                    '-ar', '16000',
-                    '-ac', '1',
-                    temp_audio
-                ]
-                subprocess.run(cmd, check=True, capture_output=True)
-                audio_path = temp_audio
-            
-            # Konuşma tanıma
-            print(f"Konuşma tanıma başlıyor... (Dil: {language if language else 'otomatik'})")
-            result = self.whisper_model.transcribe(
-                audio_path,
-                language=language,
-                verbose=True
-            )
-            print("Konuşma tanıma tamamlandı")
+            # Google Speech Recognition ile ses tanıma
+            recognizer = sr.Recognizer()
+            with sr.AudioFile(audio_path) as source:
+                audio_data = recognizer.record(source)  # Ses verisini oku
+                text = recognizer.recognize_google(audio_data, language=language)  # Google API ile tanıma yap
             
             return {
-                "text": result["text"],
-                "segments": result["segments"],
-                "language": result["language"]
+                "text": text,
+                "language": language,
+                "method": "google"
             }
+        
         except Exception as e:
-            raise Exception(f"Konuşma tanıma işlemi başarısız: {str(e)}")
+            raise Exception(f"Ses tanıma işlemi başarısız: {str(e)}")
 
     def get_audio_duration(self, audio_path: str) -> float:
         """Ses dosyasının süresini döndür"""
@@ -221,4 +191,17 @@ class AudioProcessor:
                 if os.path.isfile(file_path):
                     os.remove(file_path)
         except Exception as e:
-            print(f"Temizleme işlemi sırasında hata: {str(e)}") 
+            print(f"Temizleme işlemi sırasında hata: {str(e)}")
+
+    def download_video(self, url: str) -> str:
+        """YouTube videosunu indirir ve belirtilen dizine kaydeder."""
+        try:
+            yt = YouTube(url)
+            video = yt.streams.filter(progressive=True, file_extension='mp4').first()
+            if video is None:
+                raise Exception("İndirilecek uygun bir video bulunamadı.")
+            
+            video.download(self.download_path)
+            return os.path.join(self.download_path, video.default_filename)
+        except Exception as e:
+            raise Exception(f"Video indirme işlemi başarısız: {str(e)}") 
